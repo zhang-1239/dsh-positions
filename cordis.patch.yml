@@ -1,0 +1,9 @@
+- insert:
+    - id: positions
+      name: '@zhangxij/dsh-positions'
+      config:
+        # 数据目录。留空时按顺序取：
+        #   1) 环境变量 DSH_POSITIONS_DATA
+        #   2) 仓库内 data/（仅开发时存在才用）
+        #   3) %LOCALAPPDATA%\dsh-positions
+        dataDir: ''
