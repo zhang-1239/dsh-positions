@@ -1,0 +1,57 @@
+{
+  "name": "@zhangxij/dsh-positions",
+  "version": "0.1.0",
+  "description": "持仓成本台：记持仓、记成交，测算买卖之后的成本、仓位与保本价。不含行情、不联网。",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhang-1239/dsh-positions.git"
+  },
+  "homepage": "https://github.com/zhang-1239/dsh-positions#readme",
+  "bugs": {
+    "url": "https://github.com/zhang-1239/dsh-positions/issues"
+  },
+  "scripts": {
+    "test": "node test/server.test.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek",
+    "harness",
+    "positions",
+    "cost-basis",
+    "portfolio"
+  ],
+  "files": [
+    "index.js",
+    "client.js",
+    "seed.js",
+    "cordis.patch.yml",
+    "icon-512.png",
+    "screenshots.json",
+    "docs/screenshots",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  }
+}
