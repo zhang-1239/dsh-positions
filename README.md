@@ -11,13 +11,11 @@
 
 ![持仓总览](docs/screenshots/01-overview.jpg)
 
-![成本测算](docs/screenshots/02-calc.jpg)
+![展开后的历史记录与测算](docs/screenshots/02-calc.jpg)
 
-![方案对比](docs/screenshots/03-plans.jpg)
+![测算弹窗](docs/screenshots/03-modal.jpg)
 
-![历史成交](docs/screenshots/04-history.jpg)
-
-![分组与数据](docs/screenshots/05-settings.jpg)
+![分组弹窗](docs/screenshots/04-groups.jpg)
 
 ## 安装
 
