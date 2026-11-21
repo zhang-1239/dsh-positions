@@ -6,6 +6,20 @@ export default {
   version: 1,
   updatedAt: '2027-03-15',
   feeRate: 0.0003,
+  feeRules: [
+    {
+      id: 'eastmoney',
+      name: '东方财富（默认）',
+      commissionRate: 0.00025,
+      minCommission: 5,
+      stampDutyRate: 0.0005,
+      transferFeeRate: 0.00001,
+      otherFixed: 0,
+      note: '佣金万 2.5、最低 5 元；卖出印花税 0.05%；过户费 0.001%。可在「费率」里按你的券商改。',
+      image: ''
+    }
+  ],
+  activeFeeRule: 'eastmoney',
   tags: ['量比/换手/振幅', '偏态', '趋势4项', '股东数', '全球流动性'],
   activeTags: [],
   calc: {},
