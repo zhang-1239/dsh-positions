@@ -116,6 +116,7 @@ window.__ModuleLoader__.load({
         case 'cumQty': return s.cumQty
         case 'cumInvest': return s.cumInvest.toFixed(2)
         case 'cost': return s.last && s.last.cost !== null ? s.last.cost.toFixed(3) : '—'
+        case 'note': return s.note || ''
         default: return (s.fields && s.fields[key]) || '—'
       }
     }
@@ -138,9 +139,9 @@ window.__ModuleLoader__.load({
 .pos-btn.primary:hover { background:#1d4ac0; color:#fff; }
 .pos-btn:disabled { opacity:.5; cursor:default; }
 .pos-card { background:#fff; border:1px solid #dde3ee; border-radius:12px; }
-.pos-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 12px; margin-bottom:12px; }
+.pos-form { display:flex; gap:8px; align-items:center; flex-wrap:nowrap; overflow-x:auto; padding:10px 12px; margin-bottom:12px; }
 .pos-input, .pos-select { height:30px; border-radius:8px; border:1px solid #dde3ee; background:#fff; color:#1f2937; padding:0 8px; font-size:12px; }
-.pos-input.num { width:100px; text-align:right; }
+.pos-input.num { width:84px; text-align:right; }
 .pos-filters { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
 .pos-filter { flex:1 1 320px; padding:10px 12px; }
 .pos-filter-head { display:flex; align-items:center; justify-content:space-between; font-weight:600; font-size:13px; margin-bottom:8px; gap:8px; }
@@ -204,6 +205,31 @@ window.__ModuleLoader__.load({
 .pos-fee-field .unit { font-size:11px; color:#98a2b3; margin-left:4px; }
 .pos-fee-preview { margin-top:6px; border:1px solid #dde3ee; border-radius:8px; padding:8px; background:#fbfcff; }
 .pos-fee-preview img { max-width:100%; max-height:180px; border-radius:6px; display:block; }
+.pos-note-cell { max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#2457d6; cursor:pointer; }
+.pos-note-cell:hover { text-decoration:underline; }
+.pos-import-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+.pos-import-table th, .pos-import-table td { padding:6px 8px; text-align:left; border-bottom:1px solid #eef1f6; }
+.pos-import-table th { background:#f8fafc; font-weight:600; color:#475467; }
+.pos-import-table tr.unmatched td { background:#feeceb; }
+.pos-import-select { height:28px; border-radius:6px; border:1px solid #dde3ee; background:#fff; font-size:12px; padding:0 6px; max-width:150px; }
+.pos-drop { border:2px dashed #c7d2e5; border-radius:12px; padding:18px; text-align:center; color:#667085; font-size:12px;
+  background:#fbfcff; margin-bottom:10px; }
+.pos-drop.hot { border-color:#2457d6; background:#f2f6ff; color:#2457d6; }
+.pos-drop strong { color:#1f2937; font-size:13px; display:block; margin-bottom:4px; }
+.pos-quick { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #b7e4cf;
+  background:#e8f7f0; border-radius:10px; margin-top:10px; font-size:12px; }
+.pos-netrow { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:10px;
+  border:1px solid #dde3ee; border-radius:10px; background:#fbfcff; font-size:12px; color:#344054; }
+.pos-switch { position:relative; width:44px; height:24px; border-radius:999px; background:#d0d5dd;
+  cursor:pointer; transition:background .2s; flex:none; border:none; padding:0; }
+.pos-switch.on { background:#2457d6; }
+.pos-switch::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
+  background:#fff; transition:transform .2s; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+.pos-switch.on::after { transform:translateX(20px); }
+.pos-netrow .hint { color:#667085; }
+
+
+
 `
 
     /* ------------------------------------------------------------ 图标 */
@@ -382,6 +408,506 @@ window.__ModuleLoader__.load({
       )
     }
 
+        /* -------------------------------------------------------- 备注弹窗 */
+
+    function NoteModal(props) {
+      const { stock, onClose, onSave } = props
+      const [text, setText] = useState(stock.note || '')
+      return h(Modal, { title: '备注 · ' + stock.name, onClose, maxWidth: 560 },
+        h('p', { className: 'pos-sub', style: { marginTop: 0 } }, '写下接下来打算怎么操作这只股票，例如「跌破 9.5 减半仓」。备注会显示在持仓表这一行。'),
+        h('textarea', {
+          className: 'pos-input', style: { width: '100%', height: 120, padding: 8, lineHeight: 1.6 },
+          maxLength: 500, placeholder: '例如：等回踩 9.8 附近加仓 200 股', value: text,
+          onChange: (e) => setText(e.target.value)
+        }),
+        h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 } },
+          h('button', { className: 'pos-btn', onClick: () => onSave('') }, '清除'),
+          h('button', { className: 'pos-btn', onClick: onClose }, '取消'),
+          h('button', { className: 'pos-btn primary', onClick: () => onSave(text.trim()) }, '保存备注')
+        )
+      )
+    }
+
+    /* -------------------------------------------------------- 导入弹窗 */
+
+    function normSide(value) {
+      const v = String(value || '').trim().toLowerCase()
+      if (v === '买入' || v === '买' || v === 'b' || v === 'buy') return '买入'
+      if (v === '卖出' || v === '卖' || v === 's' || v === 'sell') return '卖出'
+      if (v === '分红' || v === '红利' || v === 'dividend') return '分红'
+      return ''
+    }
+
+    function parseImport(text) {
+      const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      if (!lines.length) return []
+      const isHeader = /日期|date|方向|side|价格|price/i.test(lines[0])
+      const head = lines[0].split(',').map((s) => s.trim().toLowerCase())
+      const pick = (...names) => head.findIndex((cell) => names.some((n) => cell === n || cell.includes(n)))
+      const idx = isHeader
+        ? {
+            date: pick('日期', 'date'), side: pick('方向', 'side', '买卖'),
+            price: pick('价格', 'price', '成交价'), qty: pick('数量', 'qty', '成交量', '股数'),
+            fee: pick('费用', 'fee', '手续费', '佣金'), name: pick('股票', '名称', 'name', 'stock')
+          }
+        : { date: 0, side: 1, price: 2, qty: 3, fee: 4, name: 5 }
+
+      return (isHeader ? lines.slice(1) : lines).map((line) => {
+        const cells = line.split(',').map((s) => s.trim())
+        const get = (i) => (i >= 0 && cells[i] !== undefined ? cells[i] : '')
+        return {
+          date: get(idx.date) || today(),
+          side: normSide(get(idx.side)),
+          price: get(idx.price),
+          qty: get(idx.qty),
+          fee: get(idx.fee),
+          name: get(idx.name)
+        }
+      }).filter((r) => r.side && Number(r.price) > 0 && Number(r.qty) > 0)
+    }
+
+    function matchByPrice(stocks, price) {
+      const p = Number(price)
+      if (!(p > 0)) return ''
+      const hits = stocks.filter((s) => {
+        if (Number(s.price) > 0 && Math.abs(Number(s.price) - p) / p < 0.005) return true
+        const last = s.records && s.records.length ? s.records[s.records.length - 1] : null
+        return last && Math.abs(Number(last.price) - p) / p < 0.005
+      })
+      return hits.length === 1 ? hits[0].name : ''
+    }
+
+    function ImportModal(props) {
+      const { stocks, onClose, onImport, initialText } = props
+      const [text, setText] = useState(initialText || '')
+      const [rows, setRows] = useState([])
+      const [note, setNote] = useState('')
+
+      const parse = (raw) => {
+        const parsed = parseImport(raw).map((r) => {
+          const explicit = r.name && stocks.some((s) => s.name === r.name)
+          const auto = !explicit && !r.name ? matchByPrice(stocks, r.price) : ''
+          return Object.assign({}, r, { name: explicit ? r.name : (r.name || auto), auto: !explicit && !!auto })
+        })
+        const autoCount = parsed.filter((r) => r.auto).length
+        setRows(parsed)
+        setNote(parsed.length
+          ? '解析到 ' + parsed.length + ' 条' + (autoCount ? '，其中 ' + autoCount + ' 条没写股票名，已按价格自动匹配（标「按价格匹配」）' : '') + '，请核对后再导入'
+          : '没有解析到有效行，格式示例：2026-11-20,买入,9.50,500,,贵州茅台')
+      }
+
+      useEffect(() => { if (initialText) parse(initialText) }, [])
+
+      const pickFile = (file) => {
+        if (!file) return
+        if (/\.xlsx$/i.test(file.name)) {
+          const reader = new FileReader()
+          reader.onload = async () => {
+            try {
+              const base64 = String(reader.result || '').split(',')[1] || ''
+              const res = await fetch(API + '/parse-xlsx', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ data: base64 })
+              })
+              const json = await res.json()
+              if (!json.ok) throw new Error(json.error || '解析失败')
+              const raw = (json.lines || []).join('\n')
+              setText(raw)
+              parse(raw)
+            } catch (err) {
+              setNote('Excel 解析失败：' + String(err.message || err))
+            }
+          }
+          reader.readAsDataURL(file)
+          return
+        }
+        if (/\.xls$/i.test(file.name)) {
+          setNote('旧版 .xls 不支持，请在 Excel 里另存为 .xlsx 或 .csv')
+          return
+        }
+        const reader = new FileReader()
+        reader.onload = () => { const raw = String(reader.result || ''); setText(raw); parse(raw) }
+        reader.readAsText(file, 'utf-8')
+      }
+
+      const setRow = (i, name) => setRows((prev) => prev.map((r, idx) => (idx === i ? Object.assign({}, r, { name }) : r)))
+      const unmatched = rows.filter((r) => !r.name).length
+
+      return h(Modal, { title: '导入成交（CSV / 文本）', onClose, maxWidth: 900 },
+        h('p', { className: 'pos-sub', style: { marginTop: 0 } },
+          '每行格式：日期,方向,价格,数量,费用(可空),股票名称(可空)。' +
+          '没写股票名称时，会按价格匹配已有持仓（误差 0.5%）；匹配不上或有多只候选时，请在下面手动选。'),
+        h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 } },
+          h('input', { type: 'file', accept: '.csv,.txt,.xlsx,text/csv,text/plain', onChange: (e) => pickFile(e.target.files && e.target.files[0]) }),
+          h('button', { className: 'pos-mini', onClick: () => parse(text) }, '解析预览')
+        ),
+        h('textarea', {
+          className: 'pos-input', style: { width: '100%', height: 110, padding: 8, lineHeight: 1.6 },
+          placeholder: '2026-11-20,买入,9.50,500,,\n2026-11-21,卖出,11.00,300,3.20,贵州茅台',
+          value: text, onChange: (e) => setText(e.target.value)
+        }),
+        note ? h('p', { className: 'pos-note' }, note) : null,
+        rows.length
+          ? h('table', { className: 'pos-import-table' },
+              h('thead', null, h('tr', null, ['日期', '方向', '价格', '数量', '费用', '匹配股票'].map((t, i) => h('th', { key: i }, t)))),
+              h('tbody', null, rows.map((r, i) => h('tr', { key: i, className: r.name ? '' : 'unmatched' },
+                h('td', null, r.date),
+                h('td', null, r.side),
+                h('td', null, r.price),
+                h('td', null, r.qty),
+                h('td', null, r.fee || '—'),
+                h('td', null, r.auto ? h('span', { className: 'pos-chip', style: { height: 20, fontSize: 10, marginRight: 4, background: '#fff7e6', borderColor: '#f3d19e', color: '#b45309' } }, '按价格匹配') : null,
+                  h('select', { className: 'pos-import-select', value: r.name, onChange: (e) => setRow(i, e.target.value) },
+                  h('option', { value: '' }, '— 请选择 —'),
+                  stocks.map((s) => h('option', { key: s.name, value: s.name }, s.name))
+                ))
+              )))
+            )
+          : null,
+        h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
+          unmatched ? h('span', { className: 'pos-error', style: { marginRight: 'auto' } }, '还有 ' + unmatched + ' 行未匹配') : null,
+          h('button', { className: 'pos-btn', onClick: onClose }, '取消'),
+          h('button', { className: 'pos-btn primary', disabled: !rows.length || unmatched > 0, onClick: () => onImport(rows) }, '确认导入')
+        )
+      )
+    }
+
+    /* -------------------------------------------------------- 图片识别 */
+
+    function ImageModal(props) {
+      const { state, onClose, onRecognized, onPatch } = props
+      const vision = state.vision || {}
+      const [draft, setDraft] = useState({ baseUrl: vision.baseUrl || '', apiKey: vision.apiKey || '', model: vision.model || '' })
+      const [busy, setBusy] = useState(false)
+      const [err, setErr] = useState('')
+      const [saved, setSaved] = useState(false)
+      const configured = !!(vision.apiKey && vision.baseUrl && vision.model)
+      const enabled = vision.enabled === true
+
+      const saveConfig = async () => {
+        await onPatch('setVision', draft)
+        setSaved(true)
+      }
+
+      const upload = (file) => {
+        if (!file) return
+        if (!configured) { setErr('请先保存 Base URL / API Key / 模型'); return }
+        if (file.size > 4 * 1024 * 1024) { setErr('图片请小于 4MB'); return }
+        const reader = new FileReader()
+        reader.onload = async () => {
+          setBusy(true); setErr('')
+          try {
+            const res = await fetch(API + '/recognize', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ image: String(reader.result || '') })
+            })
+            const json = await res.json()
+            if (!json.ok) throw new Error(json.error || '识别失败')
+            const rows = Array.isArray(json.rows) ? json.rows : []
+            if (!rows.length) { setErr('没有从图片里识别出成交记录，换一张更清晰的试试'); return }
+            const lines = rows.map((r) => [r.date || '', r.side || '', r.price || '', r.qty || '', '', r.name || ''].join(','))
+            onRecognized(lines)
+          } catch (e) {
+            setErr(String(e.message || e))
+          } finally {
+            setBusy(false)
+          }
+        }
+        reader.readAsDataURL(file)
+      }
+
+      return h(Modal, { title: '上传图片识别（需要联网）', onClose, maxWidth: 620 },
+        h('p', { className: 'pos-sub', style: { marginTop: 0 } },
+          '识别时会把这张截图发送到你自己配置的视觉接口（走网络），不会上传到别处。第一次使用请先填好接口信息。'),
+        h('div', { className: 'pos-fee-grid' },
+          h('div', { className: 'pos-fee-field' },
+            h('label', null, 'Base URL'),
+            h('input', { className: 'pos-input', placeholder: 'https://api.openai.com/v1', value: draft.baseUrl, onChange: (e) => setDraft(Object.assign({}, draft, { baseUrl: e.target.value })) })
+          ),
+          h('div', { className: 'pos-fee-field' },
+            h('label', null, '模型'),
+            h('input', { className: 'pos-input', placeholder: 'gpt-4o-mini / qwen-vl-max', value: draft.model, onChange: (e) => setDraft(Object.assign({}, draft, { model: e.target.value })) })
+          ),
+          h('div', { className: 'pos-fee-field' },
+            h('label', null, 'API Key'),
+            h('input', { className: 'pos-input', type: 'password', placeholder: 'sk-…', value: draft.apiKey, onChange: (e) => setDraft(Object.assign({}, draft, { apiKey: e.target.value })) })
+          )
+        ),
+        h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 } },
+          h('button', { className: 'pos-btn', onClick: saveConfig }, '保存配置'),
+          saved ? h('span', { className: 'pos-chip ok', style: { height: 26 } }, '已保存') : null,
+          configured ? h('span', { className: 'pos-chip ok', style: { height: 26 } }, '已配置') : h('span', { className: 'pos-chip warn', style: { height: 26 } }, '未配置')
+        ),
+        err ? h('p', { className: 'pos-error' }, err) : null,
+        h('div', { style: { marginTop: 12 } },
+          h('div', { className: 'pos-muted', style: { fontSize: 12, marginBottom: 6 } }, '选择截图（成交记录 / 对账单）'),
+          h('input', { type: 'file', accept: 'image/*', disabled: busy, onChange: (e) => upload(e.target.files && e.target.files[0]) })
+        ),
+        h('p', { className: 'pos-note' }, '图片会先转成文字行，再进入导入预览，你可以逐行核对、改股票、再确认导入。')
+      )
+    }
+
+    /* -------------------------------------------------------- 统一录入 */
+
+    function EntryPanel(props) {
+      const { stocks, state, seed, onClose, onImport, onPatch } = props
+      const [text, setText] = useState('')
+      const [rows, setRows] = useState([])
+      const [note, setNote] = useState('')
+      const [error, setError] = useState('')
+      const [busy, setBusy] = useState(false)
+      const [hot, setHot] = useState(false)
+      const [showVision, setShowVision] = useState(false)
+      const vision = state.vision || {}
+      const [vdraft, setVdraft] = useState({ baseUrl: vision.baseUrl || '', apiKey: vision.apiKey || '', model: vision.model || '' })
+      const configured = !!(vision.apiKey && vision.baseUrl && vision.model)
+      const enabled = vision.enabled === true
+
+      const parse = (raw) => {
+        const parsed = parseImport(raw).map((r) => {
+          const explicit = r.name && stocks.some((s) => s.name === r.name)
+          const auto = !explicit && !r.name ? matchByPrice(stocks, r.price) : ''
+          return Object.assign({}, r, { name: explicit ? r.name : (r.name || auto), auto: !explicit && !!auto })
+        })
+        const autoCount = parsed.filter((r) => r.auto).length
+        setRows(parsed)
+        setNote(parsed.length
+          ? '解析到 ' + parsed.length + ' 条' + (autoCount ? '，其中 ' + autoCount + ' 条没写股票名，已按价格自动匹配' : '') + '，请核对后再导入'
+          : '没有解析到有效行。格式：日期,方向,价格,数量,费用(可空),股票名称(可空)')
+      }
+
+      const fileToDataUrl = (file) => new Promise((resolvePromise, rejectPromise) => {
+        const reader = new FileReader()
+        reader.onload = () => resolvePromise(String(reader.result || ''))
+        reader.onerror = rejectPromise
+        reader.readAsDataURL(file)
+      })
+
+      const shrinkImage = (file) => new Promise((resolvePromise) => {
+        try {
+          const img = new Image()
+          const url = URL.createObjectURL(file)
+          img.onload = () => {
+            const max = 1800
+            const scale = Math.min(1, max / Math.max(img.width || 1, img.height || 1))
+            const canvas = document.createElement('canvas')
+            canvas.width = Math.max(1, Math.round((img.width || 1) * scale))
+            canvas.height = Math.max(1, Math.round((img.height || 1) * scale))
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+            URL.revokeObjectURL(url)
+            resolvePromise(canvas.toDataURL('image/jpeg', 0.9))
+          }
+          img.onerror = () => { URL.revokeObjectURL(url); resolvePromise(null) }
+          img.src = url
+        } catch {
+          resolvePromise(null)
+        }
+      })
+
+      const readText = (file) => new Promise((resolvePromise, rejectPromise) => {
+        const reader = new FileReader()
+        reader.onload = () => resolvePromise(String(reader.result || ''))
+        reader.onerror = rejectPromise
+        reader.readAsText(file, 'utf-8')
+      })
+
+      const recognize = async (file) => {
+        if (!enabled) {
+          setError('截图识别需要联网：请先打开上面的「联网识别截图」开关' + (configured ? '' : '（默认用当前 Harness 模型，识别失败可在下方指定接口）'))
+          return
+        }
+        setBusy(true); setError('')
+        try {
+          const dataUrl = (await shrinkImage(file)) || (await fileToDataUrl(file))
+          const res = await fetch(API + '/recognize', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: dataUrl })
+          })
+          const json = await res.json()
+          if (!json.ok) throw new Error(json.error || '识别失败')
+          const list = Array.isArray(json.rows) ? json.rows : []
+          if (!list.length) { setNote('没有从图片里识别出成交记录，换一张更清晰的截图试试'); return }
+          const raw = list.map((r) => [r.date || '', r.side || '', r.price || '', r.qty || '', '', r.name || ''].join(',')).join('\n')
+          setText(raw)
+          parse(raw)
+          setNote('图片识别出 ' + list.length + ' 行，已放进预览，请核对（识别可能有误差）')
+        } catch (err) {
+          setError(String(err.message || err))
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const readXlsx = async (file) => {
+        setBusy(true); setError('')
+        try {
+          const dataUrl = await fileToDataUrl(file)
+          const base64 = dataUrl.split(',')[1] || ''
+          const res = await fetch(API + '/parse-xlsx', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: base64 })
+          })
+          const json = await res.json()
+          if (!json.ok) throw new Error(json.error || 'Excel 解析失败')
+          const raw = (json.lines || []).join('\n')
+          setText(raw)
+          parse(raw)
+          setNote('Excel 已转成文本预览（' + (json.lines || []).length + ' 行）')
+        } catch (err) {
+          setError(String(err.message || err))
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const ingest = async (file) => {
+        if (!file) return
+        setError('')
+        if (String(file.type || '').startsWith('image/')) return recognize(file)
+        if (/\.xlsx$/i.test(file.name)) return readXlsx(file)
+        if (/\.xls$/i.test(file.name)) { setError('旧版 .xls 不支持，请另存为 .xlsx 或 .csv'); return }
+        try {
+          const raw = await readText(file)
+          setText(raw)
+          parse(raw)
+        } catch (err) {
+          setError(String(err.message || err))
+        }
+      }
+
+      useEffect(() => {
+        if (!seed) return
+        if (seed.kind === 'text') { setText(seed.value); parse(seed.value) }
+        else if (seed.file) ingest(seed.file)
+      }, [])
+
+      useEffect(() => {
+        const onPaste = (e) => {
+          const items = Array.from((e.clipboardData && e.clipboardData.items) || [])
+          const img = items.find((i) => i.type && i.type.startsWith('image/'))
+          if (!img) return
+          e.preventDefault()
+          ingest(img.getAsFile())
+        }
+        window.addEventListener('paste', onPaste)
+        return () => window.removeEventListener('paste', onPaste)
+      }, [enabled, configured, stocks])
+
+      const setRow = (i, patch) => setRows((prev) => prev.map((r, idx) => (idx === i ? Object.assign({}, r, patch) : r)))
+      const unmatched = rows.filter((r) => !r.name).length
+
+      return h(Modal, { title: '录入成交', onClose, maxWidth: 900 },
+        h('div', { className: 'pos-netrow' },
+          h('button', {
+            className: 'pos-switch' + (enabled ? ' on' : ''),
+            title: enabled ? '点击关闭联网识别' : '点击开启联网识别',
+            onClick: async () => {
+              setError('')
+              await onPatch('setVision', Object.assign({}, vdraft, { enabled: !enabled }))
+              setNote(!enabled ? '已开启联网识别：截图会发送给当前 Harness 模型识别' : '已关闭联网识别')
+            }
+          }),
+          h('span', null, '联网识别截图'),
+          h('span', { className: 'hint' }, enabled ? '已开启：截图会发送给当前 Harness 模型' : '已关闭：截图不会离开本机'),
+          configured ? h('span', { className: 'pos-chip ok', style: { height: 22, fontSize: 11 } }, '自定义接口已配置') : null
+        ),
+
+        h('div', {
+          className: 'pos-drop' + (hot ? ' hot' : ''),
+          onDragOver: (e) => { e.preventDefault(); setHot(true) },
+          onDragLeave: () => setHot(false),
+          onDrop: (e) => { e.preventDefault(); setHot(false); ingest((e.dataTransfer.files || [])[0]) }
+        },
+          h('strong', null, '粘贴截图 / 拖入文件'),
+          h('div', null, '按 Ctrl+V 粘贴截图，或把截图、CSV、Excel 拖到这里'),
+          h('div', { style: { marginTop: 10 } },
+            h('input', { type: 'file', accept: 'image/*,.csv,.txt,.xlsx', onChange: (e) => ingest((e.target.files || [])[0]) })
+          )
+        ),
+
+        h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 } },
+          h('span', { className: 'pos-muted', style: { fontSize: 12 } }, '或直接粘贴文本'),
+          h('button', { className: 'pos-mini', style: { marginLeft: 'auto' }, onClick: () => setShowVision(!showVision) }, configured ? '备用接口：已配置' : '备用接口（可选）'),
+          busy ? h('span', { className: 'pos-muted', style: { fontSize: 12 } }, '处理中…') : null
+        ),
+
+        showVision
+          ? h('div', { style: { border: '1px solid #dde3ee', borderRadius: 10, padding: 10, marginBottom: 10 } },
+              h('p', { className: 'pos-sub', style: { marginTop: 0 } },
+                '默认使用当前 Harness 模型识别截图；如果它不支持图片或识别失败，可以在这里指定一个支持图片的接口（可选）。'),
+              h('div', { className: 'pos-fee-grid' },
+                h('div', { className: 'pos-fee-field' },
+                  h('label', null, 'Base URL'),
+                  h('input', { className: 'pos-input', placeholder: 'https://api.openai.com/v1', value: vdraft.baseUrl, onChange: (e) => setVdraft(Object.assign({}, vdraft, { baseUrl: e.target.value })) })
+                ),
+                h('div', { className: 'pos-fee-field' },
+                  h('label', null, '模型'),
+                  h('input', { className: 'pos-input', placeholder: 'gpt-4o-mini / qwen-vl-max', value: vdraft.model, onChange: (e) => setVdraft(Object.assign({}, vdraft, { model: e.target.value })) })
+                ),
+                h('div', { className: 'pos-fee-field' },
+                  h('label', null, 'API Key'),
+                  h('input', { className: 'pos-input', type: 'password', placeholder: 'sk-…', value: vdraft.apiKey, onChange: (e) => setVdraft(Object.assign({}, vdraft, { apiKey: e.target.value })) })
+                )
+              ),
+              h('div', { style: { display: 'flex', gap: 8, marginTop: 8 } },
+                h('button', { className: 'pos-btn', onClick: async () => { await onPatch('setVision', vdraft); setNote('视觉接口已保存') } }, '保存接口')
+              )
+            )
+          : null,
+
+        h('textarea', {
+          className: 'pos-input', style: { width: '100%', height: 90, padding: 8, lineHeight: 1.6 },
+          placeholder: '2026-11-20,买入,9.50,500,,\n2026-11-21,卖出,11.00,300,3.20,贵州茅台',
+          value: text,
+          onChange: (e) => { setText(e.target.value); if (rows.length) setRows([]) }
+        }),
+        h('div', { style: { display: 'flex', gap: 8, marginTop: 8 } },
+          h('button', { className: 'pos-mini', onClick: () => parse(text) }, '解析文本')
+        ),
+
+        error ? h('p', { className: 'pos-error' }, error) : null,
+        note ? h('p', { className: 'pos-note' }, note) : null,
+
+        rows.length === 1
+          ? h('div', { className: 'pos-quick' },
+              h('span', null, '单条：'),
+              h('select', { className: 'pos-import-select', value: rows[0].name, onChange: (e) => setRow(0, { name: e.target.value }) },
+                h('option', { value: '' }, '— 选股票 —'),
+                stocks.map((s) => h('option', { key: s.name, value: s.name }, s.name))
+              ),
+              h('span', null, rows[0].side),
+              h('span', null, rows[0].price + ' × ' + rows[0].qty),
+              h('button', { className: 'pos-btn primary', disabled: !rows[0].name || busy, onClick: () => onImport(rows) }, '直接入账')
+            )
+          : null,
+
+        rows.length > 1
+          ? h('table', { className: 'pos-import-table' },
+              h('thead', null, h('tr', null, ['日期', '方向', '价格', '数量', '费用', '匹配股票', ''].map((t, i) => h('th', { key: i }, t)))),
+              h('tbody', null, rows.map((r, i) => h('tr', { key: i, className: r.name ? '' : 'unmatched' },
+                h('td', null, r.date),
+                h('td', null, r.side),
+                h('td', null, r.price),
+                h('td', null, r.qty),
+                h('td', null, r.fee || '—'),
+                h('td', null, r.auto ? h('span', { className: 'pos-chip', style: { height: 20, fontSize: 10, marginRight: 4, background: '#fff7e6', borderColor: '#f3d19e', color: '#b45309' } }, '按价格匹配') : null,
+                  h('select', { className: 'pos-import-select', value: r.name, onChange: (e) => setRow(i, { name: e.target.value }) },
+                    h('option', { value: '' }, '— 请选择 —'),
+                    stocks.map((s) => h('option', { key: s.name, value: s.name }, s.name))
+                  )),
+                h('td', null, h('button', { className: 'pos-link danger', onClick: () => setRows((prev) => prev.filter((_, idx) => idx !== i)) }, '删除'))
+              )))
+            )
+          : null,
+
+        h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
+          unmatched ? h('span', { className: 'pos-error', style: { marginRight: 'auto' } }, '还有 ' + unmatched + ' 行未匹配') : null,
+          h('button', { className: 'pos-btn', onClick: onClose }, '取消'),
+          h('button', { className: 'pos-btn primary', disabled: !rows.length || unmatched > 0 || busy, onClick: () => onImport(rows) }, '确认导入')
+        )
+      )
+    }
+
     /* -------------------------------------------------------- 归档弹窗 */
 
     function ArchiveModal(props) {
@@ -529,6 +1055,9 @@ window.__ModuleLoader__.load({
       const [archiveOpen, setArchiveOpen] = useState(false)
       const [busy, setBusy] = useState(false)
       const [form, setForm] = useState({ name: '', date: today(), side: '买入', price: '', qty: '', fee: '' })
+      const [noteFor, setNoteFor] = useState('')
+      const [entryOpen, setEntryOpen] = useState(false)
+      const [entrySeed, setEntrySeed] = useState(null)
 
       const load = () => {
         fetch(API + '/state', { cache: 'no-store' })
@@ -542,6 +1071,35 @@ window.__ModuleLoader__.load({
       }
 
       useEffect(() => { load() }, [])
+
+      useEffect(() => {
+        const onPaste = (e) => {
+          if (entryOpen) return
+          const items = Array.from((e.clipboardData && e.clipboardData.items) || [])
+          const img = items.find((i) => i.type && i.type.startsWith('image/'))
+          if (!img) return
+          e.preventDefault()
+          setEntrySeed({ file: img.getAsFile() })
+          setEntryOpen(true)
+        }
+        const onDrop = (e) => {
+          if (entryOpen) return
+          const file = (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) || null
+          if (!file) return
+          e.preventDefault()
+          setEntrySeed({ file })
+          setEntryOpen(true)
+        }
+        const onDragOver = (e) => { if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes('Files')) e.preventDefault() }
+        window.addEventListener('paste', onPaste)
+        window.addEventListener('drop', onDrop)
+        window.addEventListener('dragover', onDragOver)
+        return () => {
+          window.removeEventListener('paste', onPaste)
+          window.removeEventListener('drop', onDrop)
+          window.removeEventListener('dragover', onDragOver)
+        }
+      }, [entryOpen])
 
       const act = async (type, payload) => {
         setBusy(true)
@@ -683,7 +1241,7 @@ window.__ModuleLoader__.load({
               : h('input', { className: 'pos-input num', type: 'number', step: '0.01', placeholder: '费用(可空)', value: form.fee,
                   onChange: (e) => setForm(Object.assign({}, form, { fee: e.target.value })) }),
             h('button', { className: 'pos-btn primary', onClick: addTrade, disabled: busy }, '新增'),
-            h('button', { className: 'pos-btn', onClick: () => setArchiveOpen(true) }, '查看归档持仓' + (view.archived.length ? '（' + view.archived.length + '）' : ''))
+            h('button', { className: 'pos-btn', onClick: () => { setEntrySeed(null); setEntryOpen(true) } }, '录入 (文件/截图)'),
           ),
 
           h('div', { className: 'pos-filters' },
@@ -732,7 +1290,17 @@ window.__ModuleLoader__.load({
                     const isOpen = expanded === s.name
                     const rows = []
                     rows.push(h('tr', { key: 's-' + s.name, className: 'pos-row', onClick: () => setExpanded(isOpen ? '' : s.name) },
-                      columns.map((col) => h('td', { key: col.key }, cellValue(s, col.key))),
+                      columns.map((col) => {
+                        if (col.key === 'note') {
+                          return h('td', {
+                            key: col.key,
+                            className: 'pos-note-cell',
+                            title: s.note || '点击添加备注',
+                            onClick: (e) => { e.stopPropagation(); setNoteFor(s.name) }
+                          }, s.note ? s.note : h('span', { className: 'pos-muted' }, '添加'))
+                        }
+                        return h('td', { key: col.key }, cellValue(s, col.key))
+                      }),
                       opsCell(s)
                     ))
                     if (isOpen && !s.archived) {
@@ -762,6 +1330,27 @@ window.__ModuleLoader__.load({
             '费用按「费率」里的规则计算（默认东方财富：佣金万 2.5、最低 5 元；卖出印花税 0.05%；过户费 0.001%）。历史里写了费用就优先用记录值（* 号标注）。')
         ),
 
+        noteFor ? h(NoteModal, {
+          stock: view.stocks.find((s) => s.name === noteFor) || { name: noteFor, note: '' },
+          onClose: () => setNoteFor(''),
+          onSave: async (note) => { await act('setNote', { name: noteFor, note }); setNoteFor('') }
+        }) : null,
+        entryOpen ? h(EntryPanel, {
+          stocks: view.stocks.filter((s) => !s.archived),
+          state,
+          seed: entrySeed,
+          onClose: () => { setEntryOpen(false); setEntrySeed(null) },
+          onPatch: act,
+          onImport: async (rows) => {
+            for (const r of rows) {
+              const payload = { name: r.name, date: r.date, side: r.side, price: r.price, qty: r.qty }
+              if (r.fee !== '' && r.side !== '分红') payload.feeOverride = r.fee
+              await act('addTrade', payload)
+            }
+            setEntryOpen(false)
+            setEntrySeed(null)
+          }
+        }) : null,
         groupOpen ? h(GroupModal, { stocks: view.stocks, onClose: () => setGroupOpen(false), onSave: saveGroups }) : null,
         headerOpen ? h(HeaderModal, { state, onClose: () => setHeaderOpen(false), onPatch: act }) : null,
         feeOpen ? h(FeeModal, { state, onClose: () => setFeeOpen(false), onPatch: act }) : null,
