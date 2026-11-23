@@ -5,17 +5,27 @@
 大多数看盘软件告诉你「现在多少钱」，但不告诉你「买完这 200 股之后，我的成本、仓位、保本价会变成多少」。
 这个插件只做这一件事，顺便把持仓和成交流水记下来。
 
-> 不含行情、不联网、不荐股。所有数字都来自你自己录入的成交记录。
+> 不含行情、不联网（截图识别需手动开启）、不荐股。所有数字都来自你自己录入的成交记录。
+
+## 最近更新（v0.3.1）
+
+- **备注列**：每只股票可以写一句下一步计划（如「跌破 9.5 减半仓」），直接显示在表格里；
+- **统一录入**：一个入口同时支持 **Ctrl+V 粘贴截图**、**拖入文件**、**选择文件（CSV / XLSX / TXT）** 和 **粘贴文本**；
+- **按价格自动匹配**：没写股票名的成交，按价格匹配到已有持仓，匹配不上的在预览里手动选；
+- **归档 / 删除**：归档保留数据、从统计里隐藏；删除才真正移除；
+- **费率规则**：默认东方财富，可新建多家券商（佣金率、最低佣金、印花税、过户费、其他固定费用）；
+- **分红**：按「每股分红 × 股数」记账，红利税按持股期自动估算；
+- **表头管理**：可新增自定义列（股票代码、备注等）、调整顺序，内置列不可删。
 
 ## 截图
 
 ![持仓总览](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/01-overview.jpg)
 
-![展开后的历史记录与测算](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/02-calc.jpg)
+![录入：粘贴截图 / 拖文件 / 粘贴文本](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/02-entry.jpg)
 
-![测算弹窗](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/03-modal.jpg)
+![费率规则](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/03-fees.jpg)
 
-![分组弹窗](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/04-groups.jpg)
+![展开后的历史记录与测算](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/04-calc.jpg)
 
 ## 安装
 
