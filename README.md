@@ -19,7 +19,7 @@
 
 ## 截图
 
-![持仓总览](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/01-overview.jpg)
+![持仓总览](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/01-main.jpg)
 
 ![录入：粘贴截图 / 拖文件 / 粘贴文本](https://unpkg.com/@zhangxij/dsh-positions@latest/docs/screenshots/02-entry.jpg)
 
