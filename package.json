@@ -1,6 +1,6 @@
 {
   "name": "@zhangxij/dsh-positions",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "持仓成本台：记持仓、记成交，测算买卖之后的成本、仓位与保本价。不含行情、不联网。",
   "private": false,
   "type": "module",
