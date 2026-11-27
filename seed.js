@@ -10,12 +10,29 @@ export default {
     {
       id: 'eastmoney',
       name: '东方财富（默认）',
-      commissionRate: 0.00025,
-      minCommission: 5,
-      stampDutyRate: 0.0005,
-      transferFeeRate: 0.00001,
-      otherFixed: 0,
-      note: '佣金万 2.5、最低 5 元；卖出印花税 0.05%；过户费 0.001%。可在「费率」里按你的券商改。',
+      categories: [
+        {
+          id: 'cat-a',
+          name: 'A股',
+          commissionRate: 0.00025,
+          minCommission: 5,
+          stampDutyRate: 0.0005,
+          transferFeeRate: 0.00001,
+          otherFixed: 0,
+          note: '沪深A股：佣金万2.5、最低5元；卖出印花税0.05%；过户费0.001%'
+        },
+        {
+          id: 'cat-etf',
+          name: 'ETF',
+          commissionRate: 0.00025,
+          minCommission: 5,
+          stampDutyRate: 0,
+          transferFeeRate: 0,
+          otherFixed: 0,
+          note: 'ETF：只收佣金，不收印花税和过户费'
+        }
+      ],
+      note: '东方财富默认标准，可按你的账户改；不同品种分开设置。',
       image: ''
     }
   ],

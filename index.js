@@ -69,6 +69,7 @@ function normalizeStock(raw) {
     dayPnl: num(raw.dayPnl),
     archived: raw.archived === true,
     note: str(raw.note).slice(0, 500),
+    variant: str(raw.variant).slice(0, 40),
     fields: isObject(raw.fields)
       ? Object.keys(raw.fields).reduce((acc, k) => { acc[k] = str(raw.fields[k]).slice(0, 200); return acc }, {})
       : {},
@@ -102,18 +103,59 @@ function clampRate(value, fallback) {
   return n >= 0 && n <= 0.05 ? n : fallback
 }
 
-function normalizeRule(raw) {
+function normalizeCategory(raw, fallbackName) {
   if (!isObject(raw)) return null
-  const name = str(raw.name).trim()
+  const name = str(raw.name).trim() || fallbackName
   if (!name) return null
   return {
-    id: str(raw.id).trim() || 'rule-' + name,
-    name,
+    id: str(raw.id).trim() || 'cat-' + name,
+    name: name.slice(0, 20),
     commissionRate: clampRate(raw.commissionRate, 0.00025),
     minCommission: Math.max(0, num(raw.minCommission, 5)),
     stampDutyRate: clampRate(raw.stampDutyRate, 0.0005),
     transferFeeRate: clampRate(raw.transferFeeRate, 0.00001),
     otherFixed: Math.max(0, num(raw.otherFixed, 0)),
+    note: str(raw.note).slice(0, 200)
+  }
+}
+
+function normalizeRule(raw) {
+  if (!isObject(raw)) return null
+  const name = str(raw.name).trim()
+  if (!name) return null
+  let categories = Array.isArray(raw.categories) ? raw.categories.map((c) => normalizeCategory(c, '品种')).filter(Boolean) : []
+  if (categories.length === 0) {
+    categories = [
+      normalizeCategory({
+        name: 'A股',
+        commissionRate: raw.commissionRate,
+        minCommission: raw.minCommission,
+        stampDutyRate: raw.stampDutyRate,
+        transferFeeRate: raw.transferFeeRate,
+        otherFixed: raw.otherFixed
+      }, 'A股'),
+      normalizeCategory({
+        id: 'cat-etf',
+        name: 'ETF',
+        commissionRate: raw.commissionRate === undefined ? 0.00025 : raw.commissionRate,
+        minCommission: raw.minCommission === undefined ? 5 : raw.minCommission,
+        stampDutyRate: 0,
+        transferFeeRate: 0,
+        otherFixed: 0
+      }, 'ETF')
+    ]
+  }
+  const unique = []
+  const seen = new Set()
+  for (const category of categories) {
+    if (seen.has(category.id)) continue
+    seen.add(category.id)
+    unique.push(category)
+  }
+  return {
+    id: str(raw.id).trim() || 'rule-' + name,
+    name,
+    categories: unique,
     note: str(raw.note).slice(0, 200),
     image: str(raw.image).slice(0, 400000)
   }
@@ -133,8 +175,21 @@ function normalizeState(raw) {
     if (costIndex >= 0) columns.splice(costIndex + 1, 0, noteColumn)
     else columns.push(noteColumn)
   }
+  const charts = {}
+  if (isObject(state.charts)) {
+    for (const key of Object.keys(state.charts)) {
+      const value = state.charts[key]
+      if (!isObject(value)) continue
+      charts[str(key).slice(0, 40)] = {
+        primary: ['cost', 'cumInvest', 'cumQty', 'net'].includes(value.primary) ? value.primary : 'cost',
+        compare: ['none', 'cost', 'cumInvest', 'cumQty', 'net', 'imported'].includes(value.compare) ? value.compare : 'none',
+        type: ['line', 'bar', 'area'].includes(value.type) ? value.type : 'line'
+      }
+    }
+  }
   return {
     version: 1,
+    charts,
     columns,
     feeRules: rules,
     activeFeeRule,
@@ -292,6 +347,18 @@ const actions = {
     return state
   },
 
+  setChart(state, payload) {
+    const name = str(payload?.name).trim()
+    if (!name) throw bad('缺少股票名称')
+    const chart = isObject(payload?.chart) ? payload.chart : {}
+    state.charts[name] = {
+      primary: ['cost', 'cumInvest', 'cumQty', 'net'].includes(chart.primary) ? chart.primary : 'cost',
+      compare: ['none', 'cost', 'cumInvest', 'cumQty', 'net', 'imported'].includes(chart.compare) ? chart.compare : 'none',
+      type: ['line', 'bar', 'area'].includes(chart.type) ? chart.type : 'line'
+    }
+    return state
+  },
+
   setNote(state, payload) {
     const stock = findStock(state, str(payload?.name).trim())
     if (!stock) throw bad('找不到这只股票')
@@ -376,6 +443,13 @@ const actions = {
     return state
   },
 
+  setVariant(state, payload) {
+    const stock = findStock(state, str(payload?.name).trim())
+    if (!stock) throw bad('找不到这只股票')
+    stock.variant = str(payload?.variant).slice(0, 40)
+    return state
+  },
+
   setGroup(state, payload) {
     const stock = findStock(state, str(payload?.name).trim())
     if (!stock) throw bad('找不到这只股票')
@@ -443,6 +517,40 @@ const actions = {
   }
 }
 
+async function askHarnessText(ctx, prompt) {
+  const llm = ctx.llm
+  if (!llm || typeof llm.stream !== 'function') return { ok: false, error: '当前 Harness 没有可用的模型服务' }
+  const sel = ctx.agentDefaultModel && typeof ctx.agentDefaultModel.currentSelection === 'function'
+    ? ctx.agentDefaultModel.currentSelection()
+    : null
+  if (!sel || !sel.provider || !sel.model) return { ok: false, error: '当前会话没有默认模型' }
+  const result = await llm.stream({
+    provider: sel.provider,
+    model: sel.model,
+    sessionId: 'dsh-positions',
+    temperature: 0,
+    messages: [{
+      role: 'user',
+      source: { kind: 'user' },
+      content: [{ type: 'text', text: prompt }]
+    }]
+  })
+  let text = ''
+  if (typeof result === 'string') text = result
+  else if (result && typeof result.text === 'string') text = result.text
+  else if (result && typeof result[Symbol.asyncIterator] === 'function') {
+    for await (const chunk of result) {
+      if (typeof chunk === 'string') text += chunk
+      else if (chunk && typeof chunk.text === 'string') text += chunk.text
+      else if (chunk && typeof chunk.delta === 'string') text += chunk.delta
+    }
+  } else if (result && result.content) {
+    const parts = Array.isArray(result.content) ? result.content : [result.content]
+    text = parts.map((part) => (typeof part === 'string' ? part : (part && part.text) || '')).join('')
+  }
+  return { ok: true, text }
+}
+
 async function recognizeViaHarness(ctx, dataUrl, prompt) {
   const llm = ctx.llm
   if (!llm || typeof llm.stream !== 'function') return { ok: false, error: '当前 Harness 没有可用的模型服务' }
@@ -486,6 +594,143 @@ async function recognizeViaHarness(ctx, dataUrl, prompt) {
     text = parts.map((part) => (typeof part === 'string' ? part : (part && part.text) || '')).join('')
   }
   return { ok: true, text }
+}
+
+const SIDE_TO_MINI = { '买入': '转入', '卖出': '转出', '分红': '收益' }
+const SIDE_FROM_MINI = { '转入': '买入', '转出': '卖出', '收益': '分红' }
+
+function lastQty(records) {
+  let n = 0
+  for (const r of records) {
+    if (r.side === '买入' || r.side === '转入') n += Number(r.qty)
+    else if (r.side === '卖出' || r.side === '转出') n -= Number(r.qty)
+  }
+  return n
+}
+
+function toMiniPayload(state) {
+  const sids = new Map()
+  const stocks = state.stocks.map((s, i) => {
+    const sid = s.sid || 's' + (i + 1)
+    sids.set(s.name, sid)
+    const records = (s.records || []).map((r) => {
+      const out = { date: r.date, side: SIDE_TO_MINI[r.side] || r.side, price: Number(r.price), qty: Number(r.qty) }
+      if (r.feeOverride !== undefined && r.feeOverride !== null) out.fee = Number(r.feeOverride)
+      return out
+    })
+    const qty = lastQty(records)
+    return {
+      name: s.name,
+      sid,
+      group: s.group || '',
+      marketValue: Number(((Number(s.price) || 0) * qty).toFixed(2)),
+      dayPnl: Number(s.dayPnl) || 0,
+      variant: s.variant || '',
+      fields: s.fields && typeof s.fields === 'object' ? s.fields : {},
+      records
+    }
+  })
+  const notes = {}
+  const archived = {}
+  const calc = {}
+  state.stocks.forEach((s) => {
+    const sid = sids.get(s.name)
+    if (s.note) notes[sid] = s.note
+    if (s.archived) archived[sid] = true
+    if (state.calc && state.calc[s.name]) calc[sid] = state.calc[s.name]
+  })
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    holdings: {
+      meta: { version: 1, updatedAt: new Date().toISOString().slice(0, 10), note: '持仓成本台导出' },
+      feeRate: state.feeRate,
+      stocks
+    },
+    theory: [],
+    calc,
+    notes,
+    archived,
+    feeRules: {
+      list: (state.feeRules || []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        categories: (r.categories || []).map((c) => ({
+          key: c.id,
+          label: c.name,
+          commissionRate: c.commissionRate,
+          minCommission: c.minCommission,
+          stampDutyRate: c.stampDutyRate,
+          transferFeeRate: c.transferFeeRate,
+          otherFixed: c.otherFixed
+        }))
+      })),
+      activeId: state.activeFeeRule
+    },
+    columns: (state.columns || []).filter((c) => !c.builtin).map((c) => ({ key: c.key, label: c.label })),
+    groups: Array.from(new Set(state.stocks.map((s) => s.group).filter(Boolean)))
+  }
+}
+
+function fromMiniPayload(payload) {
+  const stocks = payload.holdings.stocks.map((s, i) => {
+    const records = (s.records || []).map((r) => {
+      const out = {
+        date: r.date,
+        side: SIDE_FROM_MINI[r.side] || r.side,
+        price: Number(r.price),
+        qty: Number(r.qty)
+      }
+      if (r.fee !== undefined) out.feeOverride = Number(r.fee)
+      return out
+    })
+    const qty = lastQty(records)
+    const price = qty > 0 ? Number(s.marketValue || 0) / qty : 0
+    const sid = s.sid || 's' + (i + 1)
+    return {
+      raw: {
+        name: s.name,
+        group: s.group || '',
+        price,
+        dayPnl: Number(s.dayPnl) || 0,
+        archived: !!(payload.archived && payload.archived[sid]),
+        note: (payload.notes && payload.notes[sid]) || '',
+        variant: s.variant || '',
+        fields: s.fields && typeof s.fields === 'object' ? s.fields : {},
+        records
+      },
+      sid
+    }
+  })
+  const calc = {}
+  for (const item of stocks) {
+    if (payload.calc && payload.calc[item.sid]) calc[item.raw.name] = payload.calc[item.sid]
+  }
+  const feeRules = payload.feeRules && Array.isArray(payload.feeRules.list)
+    ? payload.feeRules.list.map((r) => ({
+        id: r.id,
+        name: r.name,
+        categories: (r.categories || []).map((c) => ({
+          id: c.key || c.id,
+          name: c.label || c.name,
+          commissionRate: c.commissionRate,
+          minCommission: c.minCommission,
+          stampDutyRate: c.stampDutyRate,
+          transferFeeRate: c.transferFeeRate,
+          otherFixed: c.otherFixed
+        }))
+      }))
+    : null
+  const customColumns = Array.isArray(payload.columns)
+    ? payload.columns.map((c) => ({ key: c.key, label: c.label, builtin: false }))
+    : []
+  return {
+    stocks: stocks.map((item) => item.raw),
+    feeRules,
+    activeFeeRule: payload.feeRules ? payload.feeRules.activeId : undefined,
+    customColumns,
+    calc
+  }
 }
 
 function bad(message) {
@@ -580,6 +825,55 @@ export function apply(ctx, config) {
     try {
       if (req.method === 'GET' && (suffix === '/state' || suffix === '/')) {
         send(res, 200, { ok: true, dataDir, state })
+        return
+      }
+
+      if (req.method === 'GET' && suffix === '/export-json') {
+        send(res, 200, { ok: true, payload: toMiniPayload(state) })
+        return
+      }
+
+      if (req.method === 'POST' && suffix === '/import-json') {
+        const body = await readJson(req)
+        const payload = body && body.data
+        if (!isObject(payload)) { send(res, 400, { ok: false, error: '内容不是合法 JSON 对象' }); return }
+
+        let converted
+        if (isObject(payload.holdings) && Array.isArray(payload.holdings.stocks)) {
+          converted = fromMiniPayload(payload)
+        } else if (Array.isArray(payload.stocks)) {
+          const normalized = normalizeState(Object.assign({}, state, payload))
+          converted = {
+            stocks: normalized.stocks,
+            feeRules: normalized.feeRules,
+            activeFeeRule: normalized.activeFeeRule,
+            customColumns: normalized.columns.filter((c) => !c.builtin),
+            calc: normalized.calc
+          }
+        } else {
+          send(res, 400, { ok: false, error: '认不出这个 JSON：既不是小程序导出，也不是插件备份' })
+          return
+        }
+
+        try {
+          writeFileSync(stateFile + '.backup-' + Date.now() + '.json', JSON.stringify(state, null, 2), 'utf8')
+        } catch { /* 备份失败不阻塞 */ }
+
+        const next = normalizeState({
+          feeRate: state.feeRate,
+          tags: state.tags,
+          activeTags: state.activeTags,
+          charts: state.charts,
+          vision: state.vision,
+          columns: state.columns.filter((c) => c.builtin).concat(converted.customColumns || []),
+          feeRules: converted.feeRules || state.feeRules,
+          activeFeeRule: converted.activeFeeRule,
+          calc: converted.calc || {},
+          stocks: converted.stocks
+        })
+        state = next
+        persist(state)
+        send(res, 200, { ok: true, state })
         return
       }
 
@@ -678,6 +972,41 @@ export function apply(ctx, config) {
           return
         }
         send(res, 200, { ok: true, source, rows: rows.slice(0, 200) })
+        return
+      }
+
+      if (req.method === 'POST' && suffix === '/map-columns') {
+        const body = await readJson(req)
+        if (state.vision?.enabled !== true) {
+          send(res, 400, { ok: false, error: '需要先打开「联网识别」开关' })
+          return
+        }
+        const header = Array.isArray(body?.header) ? body.header.slice(0, 30).map((x) => String(x)) : []
+        const sample = Array.isArray(body?.sample) ? body.sample.slice(0, 3).map((r) => (Array.isArray(r) ? r.slice(0, 30).map((x) => String(x)) : [])) : []
+        if (!header.length) { send(res, 400, { ok: false, error: '缺少表头' }); return }
+        const prompt = [
+          '你在帮用户把成交表格的列对应到固定字段。',
+          '字段有：date(日期)、side(买入/卖出/分红)、price(成交价)、qty(成交数量)、fee(费用)、name(股票名称)。',
+          '只输出一个 JSON 对象，键是字段名，值是该字段所在的列序号（从 0 开始），没有的字段输出 null。不要解释。',
+          '表头：' + JSON.stringify(header),
+          '样例行：' + JSON.stringify(sample)
+        ].join('\n')
+        try {
+          const result = await askHarnessText(ctx, prompt)
+          if (!result.ok) { send(res, 200, { ok: false, error: result.error || '模型不可用' }); return }
+          const match = String(result.text || '').match(/\{[\s\S]*\}/)
+          if (!match) { send(res, 200, { ok: false, error: '模型没有返回可用的列映射' }); return }
+          let mapping = {}
+          try { mapping = JSON.parse(match[0]) } catch { mapping = {} }
+          const clean = {}
+          for (const key of ['date', 'side', 'price', 'qty', 'fee', 'name']) {
+            const value = mapping[key]
+            if (Number.isInteger(value) && value >= 0 && value < header.length) clean[key] = value
+          }
+          send(res, 200, { ok: true, mapping: clean })
+        } catch (error) {
+          send(res, 200, { ok: false, error: error?.message || String(error) })
+        }
         return
       }
 

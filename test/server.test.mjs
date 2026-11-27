@@ -103,6 +103,38 @@ try {
   assert.ok(reloaded.body.state.stocks.some((s) => s.name === '测试股票Z'))
   console.log('OK 重新读取：数据仍在', reloaded.body.state.stocks.length, '只')
 
+  // 9. 归档 / 恢复
+  const archived = await post('/positions/action', { type: 'archiveStock', payload: { name: '示例股票E' } })
+  assert.strictEqual(archived.status, 200)
+  assert.strictEqual(archived.body.state.stocks.find((s) => s.name === '示例股票E').archived, true)
+  const restored = await post('/positions/action', { type: 'unarchiveStock', payload: { name: '示例股票E' } })
+  assert.strictEqual(restored.body.state.stocks.find((s) => s.name === '示例股票E').archived, false)
+  console.log('OK 归档 / 恢复')
+
+  // 10. 费率规则
+  const feeState = await post('/positions/action', {
+    type: 'saveFeeRule',
+    payload: { rule: { id: 'test-broker', name: '测试券商', commissionRate: 0.0001, minCommission: 1, stampDutyRate: 0.0005, transferFeeRate: 0.00001, otherFixed: 0, note: 'x', image: '' } }
+  })
+  assert.strictEqual(feeState.status, 200)
+  assert.strictEqual(feeState.body.state.feeRules.length, 2)
+  const activated = await post('/positions/action', { type: 'setActiveFeeRule', payload: { id: 'test-broker' } })
+  assert.strictEqual(activated.body.state.activeFeeRule, 'test-broker')
+  const removed = await post('/positions/action', { type: 'deleteFeeRule', payload: { id: 'test-broker' } })
+  assert.strictEqual(removed.body.state.feeRules.length, 1)
+  assert.strictEqual(removed.body.state.activeFeeRule, 'eastmoney')
+  console.log('OK 费率规则：新增 / 切换 / 删除 / 至少保留一条')
+
+  // 11. 分红记录
+  const dividend = await post('/positions/action', {
+    type: 'addTrade',
+    payload: { name: '示例股票A', date: '2027-06-01', side: '分红', price: 0.25, qty: 1200 }
+  })
+  assert.strictEqual(dividend.status, 200)
+  const lastRecord = dividend.body.state.stocks.find((s) => s.name === '示例股票A').records.slice(-1)[0]
+  assert.strictEqual(lastRecord.side, '分红')
+  console.log('OK 分红记录：每股 0.25 × 1200 股')
+
   console.log('\nALL PASS')
 } finally {
   server.close()
